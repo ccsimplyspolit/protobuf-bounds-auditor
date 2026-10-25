@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-protobuf-bounds-auditor (proto_audit.py)
-Static security analyzer for Protocol Buffers (.proto) schemas and C++ ingestion handlers.
+protobuf-bounds-auditor (proto_audit.py) v1.1.0
+Static security analyzer and libprotobuf-mutator (DEFINE_PROTO_FUZZER) defensive
+harness generator for Protocol Buffers (.proto) schemas and C++ ingestion handlers.
 
 Detects:
-  - CWE-1284 / CWE-400: Unbounded `repeated` fields on client-supplied network messages
-    without explicit max_count annotations or server-side `_size()` guard checks.
-  - CWE-20 / CWE-682: Floating-point (`float` / `double`) angular or timing fields lacking
-    `std::isfinite` (`NaN` / `Inf`) and range clamp enforcement.
-  - CWE-674: Self-referential or deeply nested message structures susceptible to
-    wire-format recursion exhaustion.
+  - PB-001 (CWE-1284 / CWE-400): Unbounded `repeated` fields on client-supplied network
+    messages without explicit max_count annotations or server-side `_size()` guard checks.
+  - PB-002 (CWE-20 / CWE-682): Floating-point (`float` / `double`) angular or timing fields
+    lacking `std::isfinite` (`NaN` / `Inf`) and range clamp enforcement.
+  - PB-003 (CWE-20): Uncapped integer tick/index/offset fields susceptible to window inflation.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List
 
 
 @dataclasses.dataclass
@@ -34,6 +34,7 @@ class Finding:
     line: int
     description: str
     remediation: str
+    source_file: str = "<memory>"
 
 
 MESSAGE_RE = re.compile(r"^\s*message\s+([A-Za-z0-9_]+)\s*\{")
@@ -91,6 +92,7 @@ def audit_proto_text(content: str, filename: str = "<memory>") -> List[Finding]:
                             f"Enforce `if (msg.{fname}_size() > MAX_{fname.upper()}_COUNT) return false;` "
                             f"at the server ingestion boundary before iterating."
                         ),
+                        source_file=filename,
                     )
                 )
 
@@ -114,6 +116,7 @@ def audit_proto_text(content: str, filename: str = "<memory>") -> List[Finding]:
                                 f"Guard '{fname}' with `std::isfinite(msg.{fname}())` and `std::clamp(...)` "
                                 f"prior to state accumulation or interpolation."
                             ),
+                            source_file=filename,
                         )
                     )
 
@@ -137,16 +140,126 @@ def audit_proto_text(content: str, filename: str = "<memory>") -> List[Finding]:
                         remediation=(
                             f"Clamp `msg.{fname}()` against a strict server-configured maximum window ceiling."
                         ),
+                        source_file=filename,
                     )
                 )
 
     return findings
 
 
+def emit_sarif(findings: List[Finding]) -> Dict[str, Any]:
+    """Emit findings in OASIS SARIF v2.1.0 format for GitHub Code Scanning."""
+    results = []
+    for f in findings:
+        results.append(
+            {
+                "ruleId": f.rule_id,
+                "level": "error" if f.severity == "HIGH" else "warning",
+                "message": {"text": f"{f.description} Remediation: {f.remediation}"},
+                "locations": [
+                    {
+                        "physicalLocation": {
+                            "artifactLocation": {"uri": f.source_file},
+                            "region": {"startLine": f.line},
+                        }
+                    }
+                ],
+            }
+        )
+    return {
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "protobuf-bounds-auditor",
+                        "version": "1.1.0",
+                        "informationUri": "https://github.com/ccsimplyspolit/protobuf-bounds-auditor",
+                    }
+                },
+                "results": results,
+            }
+        ],
+    }
+
+
+def generate_lpm_harness(findings: List[Finding], root_message: str | None = None) -> str:
+    """
+    Generate a structure-aware libprotobuf-mutator (DEFINE_PROTO_FUZZER) C++ harness
+    that verifies post-deserialization bounds and IEEE-754 finiteness invariants.
+    """
+    if not root_message:
+        root_message = findings[0].message_name if findings else "RootMessage"
+
+    checks: List[str] = []
+    for f in findings:
+        if f.message_name != root_message:
+            continue
+        if f.rule_id == "PB-001":
+            checks.append(
+                f"  // {f.rule_id} ({f.cwe}): Guard repeated field cardinality\n"
+                f"  if (input.{f.field_name}_size() > kMaxRepeatedElements) {{\n"
+                f"    return false;\n"
+                f"  }}"
+            )
+        elif f.rule_id == "PB-002":
+            checks.append(
+                f"  // {f.rule_id} ({f.cwe}): Reject NaN / Inf on IEEE-754 wire field\n"
+                f"  if (!std::isfinite(static_cast<double>(input.{f.field_name}()))) {{\n"
+                f"    return false;\n"
+                f"  }}"
+            )
+        elif f.rule_id == "PB-003":
+            checks.append(
+                f"  // {f.rule_id} ({f.cwe}): Bound integer tick/offset window\n"
+                f"  if (input.{f.field_name}() > kMaxWindowOffset) {{\n"
+                f"    return false;\n"
+                f"  }}"
+            )
+
+    body = "\n".join(checks) if checks else "  (void)input;"
+    return f"""// Auto-generated by protobuf-bounds-auditor v1.1.0
+// Structure-aware libprotobuf-mutator + AddressSanitizer invariant harness
+#include <cmath>
+#include <cstdint>
+#include "src/libfuzzer/libfuzzer_macro.h"
+
+static constexpr int kMaxRepeatedElements = 64;
+static constexpr uint64_t kMaxWindowOffset = 4096;
+
+template <typename MsgT>
+bool ValidateDeserializedInvariants(const MsgT& input) {{
+{body}
+  return true;
+}}
+
+DEFINE_PROTO_FUZZER(const {root_message}& input) {{
+  if (!ValidateDeserializedInvariants(input)) {{
+    return;
+  }}
+  // Forward validated protobuf message to target ingestion handler under ASAN/UBSAN
+}}
+"""
+
+
 def main(argv: List[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Static security auditor for Protobuf (.proto) schemas")
+    parser = argparse.ArgumentParser(
+        description="Static security auditor & libprotobuf-mutator harness generator for Protobuf (.proto) schemas"
+    )
     parser.add_argument("paths", nargs="+", help="Path(s) to .proto files or directories")
     parser.add_argument("--json", action="store_true", help="Emit findings as JSON")
+    parser.add_argument("--sarif", action="store_true", help="Emit findings as SARIF v2.1.0")
+    parser.add_argument(
+        "--emit-lpm-harness",
+        metavar="FILE",
+        help="Write a structure-aware C++ libprotobuf-mutator (DEFINE_PROTO_FUZZER) harness to FILE",
+    )
+    parser.add_argument(
+        "--root-message",
+        metavar="MSG",
+        help="Root protobuf message name for --emit-lpm-harness",
+    )
     args = parser.parse_args(argv)
 
     all_findings: List[Finding] = []
@@ -157,7 +270,13 @@ def main(argv: List[str] | None = None) -> int:
             text = f.read_text(encoding="utf-8", errors="replace")
             all_findings.extend(audit_proto_text(text, str(f)))
 
-    if args.json:
+    if args.emit_lpm_harness:
+        harness_code = generate_lpm_harness(all_findings, args.root_message)
+        Path(args.emit_lpm_harness).write_text(harness_code, encoding="utf-8")
+
+    if args.sarif:
+        print(json.dumps(emit_sarif(all_findings), indent=2))
+    elif args.json:
         print(json.dumps([dataclasses.asdict(x) for x in all_findings], indent=2))
     else:
         for finding in all_findings:

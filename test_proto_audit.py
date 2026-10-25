@@ -1,5 +1,5 @@
 import unittest
-from proto_audit import audit_proto_text
+from proto_audit import audit_proto_text, emit_sarif, generate_lpm_harness
 
 SAMPLE_SCHEMA = """
 syntax = "proto2";
@@ -31,6 +31,22 @@ class TestProtoAudit(unittest.TestCase):
         self.assertIn("subtick_moves", fields)
         self.assertIn("yaw_delta", fields)
         self.assertIn("prediction_offset_ticks_x256", fields)
+
+    def test_emits_valid_sarif_v2_1_0(self):
+        findings = audit_proto_text(SAMPLE_SCHEMA, "usercmd.proto")
+        sarif = emit_sarif(findings)
+        self.assertEqual(sarif["version"], "2.1.0")
+        self.assertEqual(
+            sarif["runs"][0]["tool"]["driver"]["version"], "1.1.0"
+        )
+        self.assertEqual(len(sarif["runs"][0]["results"]), len(findings))
+
+    def test_generates_lpm_fuzzer_harness(self):
+        findings = audit_proto_text(SAMPLE_SCHEMA, "usercmd.proto")
+        harness = generate_lpm_harness(findings, root_message="CBaseUserCmdPB")
+        self.assertIn("DEFINE_PROTO_FUZZER(const CBaseUserCmdPB& input)", harness)
+        self.assertIn("input.subtick_moves_size() > kMaxRepeatedElements", harness)
+        self.assertIn("input.prediction_offset_ticks_x256() > kMaxWindowOffset", harness)
 
 
 if __name__ == "__main__":
