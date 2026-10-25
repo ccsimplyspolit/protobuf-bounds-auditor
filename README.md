@@ -23,7 +23,14 @@ Static security analyzer for Protocol Buffers (`.proto`) network schemas. Design
 ```bash
 python proto_audit.py path/to/schema.proto
 python proto_audit.py path/to/protos/ --json
+python proto_audit.py path/to/protos/ --sarif > audit.sarif
+python proto_audit.py path/to/schema.proto --generate-fuzzer CBaseUserCmdPB > fuzzer_harness.cc
 ```
+
+### Features in v1.1.0
+- **Allman & K&R Brace Normalization:** Supports both single-line (`message Foo {`) and multi-line Allman (`message Foo\n{`) Protocol Buffers definitions (e.g., `ValveSoftware/GameNetworkingSockets` and `onnx/onnx`).
+- **SARIF v2.1.0 Export (`--sarif`):** Produces GitHub Code Scanning compatible SARIF reports.
+- **Automated `libprotobuf-mutator` Harness Generation (`--generate-fuzzer <MessageName>`):** Emits a ready-to-compile C++ `DEFINE_PROTO_FUZZER` harness enforcing cardinality (`<= 64`) and IEEE-754 finiteness (`std::isfinite`) invariants under Clang `-fsanitize=fuzzer,address,undefined`.
 
 ### Running Unit Tests
 
