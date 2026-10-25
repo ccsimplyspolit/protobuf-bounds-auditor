@@ -264,6 +264,11 @@ def main(argv: List[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="Emit findings as JSON")
     parser.add_argument("--sarif", action="store_true", help="Emit findings as SARIF v2.1.0")
     parser.add_argument(
+        "--generate-fuzzer",
+        metavar="MSG",
+        help="Print a structure-aware C++ libprotobuf-mutator (DEFINE_PROTO_FUZZER) harness for MSG to stdout",
+    )
+    parser.add_argument(
         "--emit-lpm-harness",
         metavar="FILE",
         help="Write a structure-aware C++ libprotobuf-mutator (DEFINE_PROTO_FUZZER) harness to FILE",
@@ -284,10 +289,14 @@ def main(argv: List[str] | None = None) -> int:
             all_findings.extend(audit_proto_text(text, str(f)))
 
     if args.emit_lpm_harness:
-        harness_code = generate_lpm_harness(all_findings, args.root_message)
+        harness_code = generate_lpm_harness(all_findings, args.root_message or args.generate_fuzzer)
         out_path = Path(args.emit_lpm_harness)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(harness_code, encoding="utf-8")
+
+    if args.generate_fuzzer:
+        print(generate_lpm_harness(all_findings, args.generate_fuzzer), end="")
+        return 0
 
     if args.sarif:
         print(json.dumps(emit_sarif(all_findings), indent=2))

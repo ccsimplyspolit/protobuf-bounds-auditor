@@ -40,7 +40,8 @@ python -m unittest test_proto_audit.py
 
 ---
 
-## Related Advisories
+## Related Advisories & Audit Package
 
+- **[Audit Preparation & Architecture Package (`AUDIT_PREP.md`)](AUDIT_PREP.md)** — Trail of Bits-style review goals, scope, data-flow diagram, and measured unit test verification (`5/5 PASS`, `98%` statement coverage).
 - **[CVD-2026-CS2-001: Unbounded Protobuf `subtick_moves` Deserialization & Angular Velocity Validation Failure](https://github.com/ccsimplyspolit/cs-telemetry-internals/blob/main/advisories/valve_server_disclosures/H1_Report_Subtick_Input_Validation.md)**
 - **[CVD-2026-CS2-003: Missing Server-Side View-Angle Pitch Clamping & AnimGraph NaN Extrapolation Crash](https://github.com/ccsimplyspolit/cs-telemetry-internals/blob/main/advisories/valve_server_disclosures/H1_Report_Viewangle_Spoof_Crash.md)**
