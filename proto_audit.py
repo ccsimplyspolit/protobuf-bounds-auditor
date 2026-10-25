@@ -37,7 +37,7 @@ class Finding:
     source_file: str = "<memory>"
 
 
-MESSAGE_RE = re.compile(r"^\s*message\s+([A-Za-z0-9_]+)\s*\{")
+MESSAGE_RE = re.compile(r"^\s*message\s+([A-Za-z0-9_]+)\s*(\{)?\s*$")
 FIELD_RE = re.compile(
     r"^\s*(repeated|optional|required)?\s*([A-Za-z0-9_.]+)\s+([A-Za-z0-9_]+)\s*=\s*(\d+)\s*([^;]*);"
 )
@@ -46,6 +46,7 @@ FIELD_RE = re.compile(
 def audit_proto_text(content: str, filename: str = "<memory>") -> List[Finding]:
     findings: List[Finding] = []
     current_msg = None
+    pending_msg = None
     brace_depth = 0
 
     for idx, raw_line in enumerate(content.splitlines(), start=1):
@@ -53,10 +54,22 @@ def audit_proto_text(content: str, filename: str = "<memory>") -> List[Finding]:
         if not line:
             continue
 
+        if pending_msg is not None:
+            if "{" in line:
+                current_msg = pending_msg
+                pending_msg = None
+                brace_depth = line.count("{") - line.count("}")
+                continue
+            else:
+                pending_msg = None
+
         msg_match = MESSAGE_RE.match(line)
         if msg_match:
-            current_msg = msg_match.group(1)
-            brace_depth += line.count("{") - line.count("}")
+            if msg_match.group(2) == "{":
+                current_msg = msg_match.group(1)
+                brace_depth += line.count("{") - line.count("}")
+            else:
+                pending_msg = msg_match.group(1)
             continue
 
         if current_msg:
@@ -272,7 +285,9 @@ def main(argv: List[str] | None = None) -> int:
 
     if args.emit_lpm_harness:
         harness_code = generate_lpm_harness(all_findings, args.root_message)
-        Path(args.emit_lpm_harness).write_text(harness_code, encoding="utf-8")
+        out_path = Path(args.emit_lpm_harness)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(harness_code, encoding="utf-8")
 
     if args.sarif:
         print(json.dumps(emit_sarif(all_findings), indent=2))
