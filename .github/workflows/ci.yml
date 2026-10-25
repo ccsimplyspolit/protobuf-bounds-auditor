@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-and-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run Unit Test Suite
+        run: python -m unittest discover -v
+      - name: Verify SARIF v2.1.0 & DEFINE_PROTO_FUZZER Generation on Sample Schemas
+        run: |
+          python proto_audit.py samples/ --sarif > audit.sarif
+          python proto_audit.py samples/subtick_usercmd.proto --generate-fuzzer CBaseUserCmdPB > fuzzer_harness.cc
+          test -s audit.sarif
+          test -s fuzzer_harness.cc

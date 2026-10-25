@@ -1,0 +1,18 @@
+syntax = "proto2";
+
+message CSubtickMoveStep {
+    optional uint64 button = 1;
+    optional bool pressed = 2;
+    optional float when = 3;
+    optional float analog_forward_delta = 4;
+    optional float analog_left_delta = 5;
+    optional float pitch_delta = 8;
+    optional float yaw_delta = 9;
+}
+
+message CBaseUserCmdPB {
+    optional int32 command_number = 1;
+    optional int32 client_tick = 2;
+    optional uint32 prediction_offset_ticks_x256 = 17;
+    repeated CSubtickMoveStep subtick_moves = 18;
+}
