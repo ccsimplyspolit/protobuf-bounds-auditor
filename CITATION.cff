@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+title: "protobuf-bounds-auditor: Static Security Analyzer for Protocol Buffers (.proto) Schemas"
+message: "If you use this software in your research or security audits, please cite it using the metadata below."
+type: software
+authors:
+  - family-names: Shunko
+    given-names: Serhii
+    orcid: "https://orcid.org/0009-0002-4183-0361"
+    email: cc.simply.spolit@gmail.com
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23641037
+repository-code: "https://github.com/ccsimplyspolit/protobuf-bounds-auditor"
+url: "https://ccsimplyspolit.github.io/"
+license: MIT
+version: 1.1.0
+date-released: "2026-10-25"
+keywords:
+  - protocol-buffers
+  - static-analysis
+  - fuzzing
+  - libprotobuf-mutator
+  - sarif
+  - cwe-1284
+  - cwe-20
+  - cwe-400

@@ -1,0 +1,30 @@
+{
+  "title": "protobuf-bounds-auditor: Static Security Analyzer for Protocol Buffers (.proto) Schemas",
+  "upload_type": "software",
+  "description": "Zero-dependency static security analyzer for Protocol Buffers (.proto) schemas detecting unbounded repeated sub-messages (CWE-1284), unvalidated IEEE-754 float/double wire fields (CWE-20), and untrusted allocation lengths (CWE-400), with SARIF v2.1.0 export and DEFINE_PROTO_FUZZER harness generation.",
+  "creators": [
+    {
+      "name": "Shunko, Serhii",
+      "orcid": "0009-0002-4183-0361"
+    }
+  ],
+  "license": "MIT",
+  "version": "1.1.0",
+  "keywords": [
+    "Protocol Buffers",
+    "Static Analysis",
+    "Fuzzing",
+    "libprotobuf-mutator",
+    "SARIF",
+    "CWE-1284",
+    "CWE-20",
+    "CWE-400"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/ccsimplyspolit/protobuf-bounds-auditor",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ]
+}
