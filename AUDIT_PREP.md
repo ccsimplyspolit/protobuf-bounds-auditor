@@ -1,7 +1,6 @@
 # Audit Preparation & Architecture Package (`AUDIT_PREP.md`)
 
 - **Project:** `protobuf-bounds-auditor` (`v1.1.0`)
-- **Archival DOI:** [`10.5281/zenodo.23640498`](https://doi.org/10.5281/zenodo.23640498)
 - **Lead Researcher:** Serhii Shunko (`@sshunko` / `@ccsimplyspolit`, ORCID [`0009-0002-4183-0361`](https://orcid.org/0009-0002-4183-0361))
 - **Methodology:** Trail of Bits Audit Preparation Checklist (`audit-prep-assistant`)
 
@@ -43,16 +42,18 @@ python -m unittest discover -v
 | File | Lines | Purpose |
 |---|---|---|
 | `proto_audit.py` | 318 | Core `.proto` static analyzer, SARIF v2.1.0 emitter, and `DEFINE_PROTO_FUZZER` C++ generator |
-| `test_proto_audit.py` | 109 | End-to-end unit and CLI test suite |
-| `CITATION.cff` | 17 | Academic citation and CERN/Zenodo DOI metadata |
+| `test_proto_audit.py` | 109 | End-to-end unit and CLI test suite (`5/5 PASS`) |
+| `examples/gns_lpm_invariant_harness.cc` | 64 | Reference `DEFINE_PROTO_FUZZER` C++ invariant harness for `GameNetworkingSockets` |
+| `samples/subtick_usercmd.proto` | 26 | Sample `.proto` schema exercising `PB-001`, `PB-002`, and `PB-003` |
 
 ### Verification Commands
 ```bash
 git clone https://github.com/ccsimplyspolit/protobuf-bounds-auditor.git
 cd protobuf-bounds-auditor
 python -m unittest discover -v
-python proto_audit.py path/to/schema.proto --sarif
-python proto_audit.py path/to/schema.proto --generate-fuzzer CBaseUserCmdPB
+python proto_audit.py samples/subtick_usercmd.proto --sarif
+python proto_audit.py samples/subtick_usercmd.proto --json
+python proto_audit.py samples/subtick_usercmd.proto --root-message CBaseUserCmdPB --emit-lpm-harness fuzzer_harness.cc
 ```
 
 ---
