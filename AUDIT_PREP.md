@@ -2,7 +2,7 @@
 
 - **Project:** `protobuf-bounds-auditor` (`v1.1.0`)
 - **Lead Researcher:** Serhii Shunko (`@sshunko` / `@ccsimplyspolit`, ORCID [`0009-0002-4183-0361`](https://orcid.org/0009-0002-4183-0361))
-- **Methodology:** Trail of Bits Audit Preparation Checklist (`audit-prep-assistant`)
+- **Methodology:** Trail of Bits Audit Preparation Checklist (Static & Dynamic Verification Suite)
 
 ---
 
@@ -44,7 +44,7 @@ python -m unittest discover -v
 | `proto_audit.py` | 318 | Core `.proto` static analyzer, SARIF v2.1.0 emitter, and `DEFINE_PROTO_FUZZER` C++ generator |
 | `test_proto_audit.py` | 109 | End-to-end unit and CLI test suite (`5/5 PASS`) |
 | `examples/gns_lpm_invariant_harness.cc` | 64 | Reference `DEFINE_PROTO_FUZZER` C++ invariant harness for `GameNetworkingSockets` |
-| `samples/subtick_usercmd.proto` | 26 | Sample `.proto` schema exercising `PB-001`, `PB-002`, and `PB-003` |
+| `samples/subtick_usercmd.proto` | 18 | Sample `.proto` schema exercising `PB-001`, `PB-002`, and `PB-003` |
 
 ### Verification Commands
 ```bash
