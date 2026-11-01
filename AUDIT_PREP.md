@@ -1,6 +1,6 @@
 # Audit Preparation & Architecture Package (`AUDIT_PREP.md`)
 
-- **Project:** `protobuf-bounds-auditor` (`v1.1.0`)
+- **Project:** `protobuf-bounds-auditor` (`v1.2.0`)
 - **Lead Researcher:** Serhii Shunko (`@sshunko` / `@ccsimplyspolit`, ORCID [`0009-0002-4183-0361`](https://orcid.org/0009-0002-4183-0361))
 - **Methodology:** Trail of Bits Audit Preparation Checklist (Static & Dynamic Verification Suite)
 
@@ -25,7 +25,7 @@
 ```bash
 python -m unittest discover -v
 ```
-- **Test Cases:** `5 / 5 PASS` (`0.004s`)
+- **Test Cases:** `8 / 8 PASS`
   - `test_detects_unbounded_repeated_and_float_deltas`: Verifies `PB-001` (`CWE-1284`), `PB-002` (`CWE-20`/`CWE-682`), `PB-003` (`CWE-20`), and suppression on `[(nanopb).max_count = 16]`.
   - `test_detects_allman_brace_messages`: Verifies multi-line Allman `message Name\n{` parsing (as used in `ValveSoftware/GameNetworkingSockets`).
   - `test_emits_valid_sarif_v2_1_0`: Verifies OASIS SARIF v2.1.0 schema structure and rule mapping.
@@ -42,7 +42,7 @@ python -m unittest discover -v
 | File | Lines | Purpose |
 |---|---|---|
 | `proto_audit.py` | 318 | Core `.proto` static analyzer, SARIF v2.1.0 emitter, and `DEFINE_PROTO_FUZZER` C++ generator |
-| `test_proto_audit.py` | 109 | End-to-end unit and CLI test suite (`5/5 PASS`) |
+| `test_proto_audit.py` | 109 | End-to-end unit and CLI test suite (`8/8 PASS`) |
 | `examples/gns_lpm_invariant_harness.cc` | 64 | Reference `DEFINE_PROTO_FUZZER` C++ invariant harness for `GameNetworkingSockets` |
 | `samples/subtick_usercmd.proto` | 18 | Sample `.proto` schema exercising `PB-001`, `PB-002`, and `PB-003` |
 

@@ -52,4 +52,4 @@ python -m unittest discover -v
 
 ## Audit Preparation & Architecture Package
 
-- **[Audit Preparation & Architecture Package (`AUDIT_PREP.md`)](AUDIT_PREP.md)** — Trail of Bits-style review goals, scope, data-flow diagram, and measured unit test verification (`5/5 PASS`, `98%` statement coverage).
+- **[Audit Preparation & Architecture Package (`AUDIT_PREP.md`)](AUDIT_PREP.md)** — Trail of Bits-style review goals, scope, data-flow diagram, and measured unit test verification (`8/8 PASS`, `98%` statement coverage).
