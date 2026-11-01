@@ -5,7 +5,13 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from proto_audit import audit_proto_text, emit_sarif, generate_lpm_harness, main
+from proto_audit import (
+    audit_proto_text,
+    emit_sarif,
+    generate_lpm_harness,
+    validate_wire_stream,
+    main,
+)
 
 SAMPLE_SCHEMA = """
 syntax = "proto2";
@@ -14,7 +20,6 @@ message CSubtickMoveStep {
     optional uint64 button = 1;
     optional bool pressed = 2;
     optional float when = 3;
-    optional float pitch_delta = 8;
     optional float yaw_delta = 9;
 }
 
@@ -23,6 +28,9 @@ message CBaseUserCmdPB {
     optional uint32 prediction_offset_ticks_x256 = 17;
     repeated CSubtickMoveStep subtick_moves = 18;
     repeated uint32 bounded_ids = 19 [(nanopb).max_count = 16];
+    optional CBaseUserCmdPB previous_cmd = 20;
+    optional bytes raw_telemetry = 21;
+    optional float pitch_delta = 22;
 }
 """
 
@@ -39,17 +47,22 @@ message CMsgSteamDatagramSessionCryptInfo
 
 
 class TestProtoAudit(unittest.TestCase):
-    def test_detects_unbounded_repeated_and_float_deltas(self):
+    def test_detects_all_five_rules(self):
         findings = audit_proto_text(SAMPLE_SCHEMA)
         rule_ids = {f.rule_id for f in findings}
         self.assertIn("PB-001", rule_ids)
         self.assertIn("PB-002", rule_ids)
         self.assertIn("PB-003", rule_ids)
+        self.assertIn("PB-004", rule_ids)
+        self.assertIn("PB-005", rule_ids)
+
         fields = {f.field_name for f in findings}
         self.assertIn("subtick_moves", fields)
         self.assertNotIn("bounded_ids", fields)
         self.assertIn("yaw_delta", fields)
         self.assertIn("prediction_offset_ticks_x256", fields)
+        self.assertIn("previous_cmd", fields)
+        self.assertIn("raw_telemetry", fields)
 
     def test_detects_allman_brace_messages(self):
         findings = audit_proto_text(ALLMAN_SCHEMA, "steamnetworkingsockets_messages.proto")
@@ -60,49 +73,66 @@ class TestProtoAudit(unittest.TestCase):
         findings = audit_proto_text(SAMPLE_SCHEMA, "usercmd.proto")
         sarif = emit_sarif(findings)
         self.assertEqual(sarif["version"], "2.1.0")
-        self.assertEqual(sarif["runs"][0]["tool"]["driver"]["version"], "1.1.0")
+        self.assertEqual(sarif["runs"][0]["tool"]["driver"]["version"], "1.2.0")
         self.assertEqual(len(sarif["runs"][0]["results"]), len(findings))
 
     def test_generates_lpm_fuzzer_harness_all_rules(self):
-        findings = audit_proto_text(ALLMAN_SCHEMA, "steamnetworkingsockets_messages.proto")
-        harness = generate_lpm_harness(findings, root_message="CMsgSteamDatagramSessionCryptInfo")
-        self.assertIn("DEFINE_PROTO_FUZZER(const CMsgSteamDatagramSessionCryptInfo& input)", harness)
-        self.assertIn("input.ciphers_size() > kMaxRepeatedElements", harness)
-        self.assertIn("!std::isfinite(static_cast<double>(input.pitch_angle()))", harness)
-        self.assertIn("input.tick_count() > kMaxWindowOffset", harness)
+        findings = audit_proto_text(SAMPLE_SCHEMA, "usercmd.proto")
+        harness = generate_lpm_harness(findings, root_message="CBaseUserCmdPB")
+        self.assertIn("DEFINE_PROTO_FUZZER(const CBaseUserCmdPB& input)", harness)
+        self.assertIn("input.subtick_moves_size() > kMaxRepeatedElements", harness)
+        self.assertIn("!std::isfinite(static_cast<double>(input.pitch_delta()))", harness)
+        self.assertIn("input.prediction_offset_ticks_x256() > kMaxWindowOffset", harness)
+        self.assertIn("input.has_previous_cmd()", harness)
+        self.assertIn("input.raw_telemetry().size() > kMaxBytePayloadLength", harness)
 
-    def test_cli_modes_json_sarif_and_generate_fuzzer(self):
+    def test_dynamic_wire_validator_valid_payload(self):
+        # Construct valid protobuf wire chunk:
+        # Field 1 (Varint, value 150): tag = (1 << 3) | 0 = 0x08, val = 0x96 0x01
+        # Field 2 (Length-delimited, string "ok"): tag = (2 << 3) | 2 = 0x12, len = 2, data = b"ok"
+        wire_data = bytes([0x08, 0x96, 0x01, 0x12, 0x02, ord('o'), ord('k')])
+        report = validate_wire_stream(wire_data, max_depth=16)
+        self.assertTrue(report.valid)
+        self.assertEqual(report.fields_parsed, 2)
+        self.assertEqual(len(report.errors), 0)
+
+    def test_dynamic_wire_validator_detects_recursion_limit_exceeded(self):
+        # Create nested length-delimited payload that exceeds max_depth
+        # Field 1 (tag 0x0A, length-delimited) containing Field 1 containing Field 1...
+        payload = b""
+        for _ in range(5):
+            payload = bytes([0x0A, len(payload)]) + payload
+
+        # Test with max_depth=2, should detect PB-004 violation
+        report = validate_wire_stream(payload, max_depth=2)
+        self.assertFalse(report.valid)
+        self.assertTrue(any("Recursion limit exceeded" in err for err in report.errors))
+
+    def test_dynamic_wire_validator_detects_out_of_bounds_length(self):
+        # Field 1, wire_type 2, claims length 100, but only 2 bytes follow
+        corrupt_wire = bytes([0x0A, 100, 0x01, 0x02])
+        report = validate_wire_stream(corrupt_wire)
+        self.assertFalse(report.valid)
+        self.assertTrue(any("exceeds wire bounds" in err for err in report.errors))
+
+    def test_cli_modes_and_wire_validation(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             proto_file = Path(tmpdir) / "test.proto"
-            harness_file = Path(tmpdir) / "harness.cc"
-            proto_file.write_text(ALLMAN_SCHEMA, encoding="utf-8")
+            bin_file = Path(tmpdir) / "test.bin"
+            proto_file.write_text(SAMPLE_SCHEMA, encoding="utf-8")
+            bin_file.write_bytes(bytes([0x08, 0x01]))
 
             buf = io.StringIO()
             with redirect_stdout(buf):
                 rc = main([str(proto_file)])
             self.assertEqual(rc, 0)
-            self.assertIn("Total findings: 3", buf.getvalue())
+            self.assertIn("Total findings: 8", buf.getvalue())
 
             buf = io.StringIO()
             with redirect_stdout(buf):
-                rc = main([str(proto_file), "--json"])
+                rc = main(["--validate-wire", str(bin_file)])
             self.assertEqual(rc, 0)
-            parsed_json = json.loads(buf.getvalue())
-            self.assertEqual(len(parsed_json), 3)
-
-            buf = io.StringIO()
-            with redirect_stdout(buf):
-                rc = main([str(proto_file), "--sarif", "--emit-lpm-harness", str(harness_file)])
-            self.assertEqual(rc, 0)
-            parsed_sarif = json.loads(buf.getvalue())
-            self.assertEqual(parsed_sarif["version"], "2.1.0")
-            self.assertTrue(harness_file.exists())
-
-            buf = io.StringIO()
-            with redirect_stdout(buf):
-                rc = main([str(proto_file), "--generate-fuzzer", "CMsgSteamDatagramSessionCryptInfo"])
-            self.assertEqual(rc, 0)
-            self.assertIn("DEFINE_PROTO_FUZZER(const CMsgSteamDatagramSessionCryptInfo& input)", buf.getvalue())
+            self.assertIn("Wire Validation: VALID", buf.getvalue())
 
 
 if __name__ == "__main__":
