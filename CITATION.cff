@@ -14,8 +14,8 @@ identifiers:
 repository-code: "https://github.com/ccsimplyspolit/protobuf-bounds-auditor"
 url: "https://ccsimplyspolit.github.io/"
 license: MIT
-version: 1.1.0
-date-released: "2026-10-25"
+version: 1.2.0
+date-released: "2026-11-01"
 keywords:
   - protocol-buffers
   - static-analysis
@@ -25,3 +25,4 @@ keywords:
   - cwe-1284
   - cwe-20
   - cwe-400
+  - cwe-674
